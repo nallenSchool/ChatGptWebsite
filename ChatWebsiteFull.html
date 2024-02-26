@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chatbot Example</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #chatContainer {
+            width: 60%;
+            height: 600px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column-reverse;
+            padding: 10px;
+            background: #f9f9f9;
+        }
+        .message {
+            word-wrap: break-word;
+            max-width: 100%;
+            border-radius: 8px; /* Maintain the border radius */
+            overflow: hidden; /* Keeps the content within the border radius */
+            padding: 8px 12px; /* Adjust the vertical and horizontal padding as needed */
+        }
+        .message pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 0;
+            background-color: inherit;
+            border: none;
+            font-family: inherit;
+            /* Remove padding from <pre> if .message has padding to avoid double padding */
+        }
+        .userMessage {
+            align-self: flex-end;
+            background-color: #0f62fe;
+            color: white;
+        }
+        .botMessage {
+            align-self: flex-start;
+            background-color: #e0e0e0;
+        }
+        .input-container {
+            position: relative;
+            display: inline-block;
+        }
+        
+        #chatInput {
+            width: 1000px; /* Adjust width as needed */
+            height: 100px; /* Adjust height to make it taller */
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Ensures padding does not affect the overall dimensions */
+            resize: none; /* Optional: Prevents resizing */
+            overflow-y: auto; /* Allows scrolling within the textarea */
+        }
+        
+        #tokenCounter {
+            position: absolute;
+            right: 10px; /* Adjust as needed */
+            bottom: 10px; /* Adjust as needed */
+            background-color: rgba(255, 255, 255, 0.8); /* Slightly transparent background */
+            padding: 2px 5px;
+            font-size: 12px;
+            color: black;
+        }
+        .settings-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px; /* Space between buttons */
+            margin-top: 20px;
+        }
+        .settings-buttons button.selected {
+            background-color: #007bff; /* Example: blue background for selected button */
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Existing HTML elements for API selection and input -->
+
+    <!-- Chatbot Section -->
+    <div id="chatContainer"></div>
+    <div class="input-container">
+        <textarea id="chatInput" placeholder="Type your message..."></textarea>
+        <div id="tokenCounter">0 / 1000</div>
+    </div>
+    <button id="sendChat">Send</button>
+    <div class="settings-buttons">
+        <button class="selected" id="SingleMessage">Single Message</button>
+        <button id="MessageHistory">Message History</button>
+        <button id="ModerationTest">Moderation</button>
+    </div>
+    <script>
+        let isRequestInProgress = false;
+        let requestCount = 0;
+        const maxRequestsPerMinute = 15; // Adjust as necessary
+        let requestTimer = null;
+        const maxTokens = 20; // Maximum allowed tokens
+        let currentSetting = "SingleMessage";
+        let baseApiUrl = "nallen.pythonanywhere.com"
+
+        document.getElementById("chatInput").addEventListener("keydown", function(event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault(); // Prevent the default action to avoid a new line
+                sendMessage(); // Trigger the sendMessage function
+            }
+            // If Shift+Enter is pressed, allow the default action (new line)
+        });
+        document.getElementById("sendChat").addEventListener("click", sendMessage);
+        document.getElementById("chatInput").addEventListener("input", updateTokenCount);
+        document.getElementById("chatInput").addEventListener("paste", handlePaste);
+
+        document.getElementById("SingleMessage").addEventListener("click", handleSettingClick);
+        document.getElementById("MessageHistory").addEventListener("click", handleSettingClick);
+        document.getElementById("ModerationTest").addEventListener("click", handleSettingClick);
+
+        const inputField = document.getElementById("chatInput");
+        const tokenCounter = document.getElementById("tokenCounter");
+        tokenCounter.textContent = `0 / ${maxTokens}`;
+
+        function sendMessage() {
+            if (isRequestInProgress || requestCount >= maxRequestsPerMinute) {
+                console.log("Please wait before sending another message.");
+                return; // Exit the function if a request is in progress or rate limit exceeded
+            }
+
+            const chatInput = document.getElementById("chatInput");
+            const chatContainer = document.getElementById("chatContainer");
+            let sessionId = sessionStorage.getItem("chatSessionId"); // Retrieve existing session ID
+
+            const message = chatInput.value.trim();
+            if (message === "") return; // Don't send empty messages
+
+            isRequestInProgress = true; // Set the flag to true to block further messages
+            requestCount++; // Increment the request count
+
+            
+            if(currentSetting === "MessageHistory"){
+                addMessageToChat("user", message);
+
+                const apiUrl = "http://nallen.pythonanywhere.com/chatHistory";
+                const payload = { 
+                    message: message, 
+                    sessionId: sessionId // Send undefined if no session exists yet
+                };
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Assuming data contains { message: "response message", sessionId: "new or existing session ID" }
+                    if (!sessionId) {
+                        // Save the new session ID for future messages
+                        sessionStorage.setItem("chatSessionId", data.sessionId);
+                    }
+                    // Display bot's response
+                    addMessageToChat("bot", data.response);
+                    isRequestInProgress = false;
+                })
+                .catch(error => console.error("Error:", error));
+            } else if(currentSetting === "SingleMessage"){
+                clearChatMessages();
+                addMessageToChat("user", message);
+                
+                const apiUrl = "http://nallen.pythonanywhere.com/chat";
+                const payload = { 
+                    message: message
+                };
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    addMessageToChat("bot", data.response);
+                    isRequestInProgress = false;
+                })
+                .catch(error => console.error("Error:", error));
+            } else if(currentSetting === "ModerationTest"){
+                clearChatMessages();
+                addMessageToChat("user", message);
+                
+                const apiUrl = "http://nallen.pythonanywhere.com/moderation";
+                const payload = { 
+                    message: message
+                };
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    addMessageToChat("bot", data.response);
+                    isRequestInProgress = false;
+                })
+                .catch(error => console.error("Error:", error));
+            }
+            chatInput.value = ""; // Clear input field after sending
+            updateTokenCount(); // Reset token counter
+
+            if (!requestTimer) {
+                requestTimer = setTimeout(() => {
+                    requestCount = 0;
+                    requestTimer = null;
+                }, 60000); // 60 seconds
+            }
+        }
+
+        function addMessageToChat(sender, message) {
+            const chatContainer = document.getElementById("chatContainer");
+            const messageDiv = document.createElement("div");
+            messageDiv.classList.add("message", sender === "user" ? "userMessage" : "botMessage");
+        
+            if (typeof message === "object") {
+                // Convert object to a formatted string for display
+                const pre = document.createElement("pre");
+                pre.textContent = JSON.stringify(message, null, 2);
+                messageDiv.appendChild(pre);
+            } else {
+                // For non-object messages, just use textContent
+                messageDiv.textContent = message;
+            }
+        
+            chatContainer.prepend(messageDiv); // Adds the new message at the top
+        }
+
+        function updateTokenCount(event) {
+            // Calculate the token count based on current input
+            const tokens = inputField.value.trim().split(/\s+|(?=[,.!?;:])|(?<=[,.!?;:])/).filter(Boolean);
+            const roughTokenCount = tokens.length;
+
+            if (roughTokenCount > maxTokens) {
+                // If the input exceeds the token limit, prevent the additional input
+                // Allow user to delete or backspace
+                if (event.inputType !== "deleteContentBackward" && event.inputType !== "deleteContentForward") {
+                    event.target.value = event.target.value.slice(0, -1); // Remove the last character
+                }
+                tokenCounter.textContent = `${maxTokens} / ${maxTokens}`;
+            } else {
+                tokenCounter.textContent = `${roughTokenCount} / ${maxTokens}`;
+            }
+
+            // Update styling based on token count
+            tokenCounter.style.color = roughTokenCount >= maxTokens ? 'red' : 'black';
+        }
+
+        function handlePaste(event) {
+            const pasteText = (event.clipboardData || window.clipboardData).getData('text');
+            const inputField = document.getElementById("chatInput");
+            const currentText = inputField.value;
+            // Calculate the position where the text is being pasted
+            const cursorPosition = inputField.selectionStart;
+            const textBeforeCursor = currentText.slice(0, cursorPosition);
+            const textAfterCursor = currentText.slice(inputField.selectionEnd);
+            // Simulate the text value after paste
+            const simulatedText = textBeforeCursor + pasteText + textAfterCursor;
+            // Calculate the token count for the simulated text
+            const tokens = simulatedText.trim().split(/\s+|(?=[,.!?;:])|(?<=[,.!?;:])/).filter(Boolean);
+            const roughTokenCount = tokens.length;
+
+            if (roughTokenCount > maxTokens) {
+                event.preventDefault(); // Prevent the paste
+                // Optionally, alert the user
+                alert(`Pasting this text would exceed the maximum allowed token limit of ${maxTokens}.`);
+            }
+        }
+
+        function clearChatMessages() {
+            const chatContainer = document.getElementById("chatContainer");
+            chatContainer.innerHTML = ''; // Clear the chat container
+        }
+
+        function handleSettingClick(event) {
+            // Remove 'selected' class from all buttons
+            document.querySelectorAll(".settings-buttons button").forEach(button => {
+                button.classList.remove("selected");
+            });
+            
+            // Add 'selected' class to the clicked button
+            event.target.classList.add("selected");
+        
+            // Update the global variable with the id of the clicked button
+            currentSetting = event.target.id;
+            console.log("Selected setting:", currentSetting);
+            if(currentSetting === "MessageHistory"){
+                sessionStorage.setItem("chatSessionId", null);
+            }
+            isRequestInProgress = false;
+            clearChatMessages()
+        }
+    </script>
+</body>
+</html>
