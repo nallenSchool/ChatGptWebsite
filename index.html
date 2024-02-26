@@ -149,7 +149,7 @@
             if(currentSetting === "MessageHistory"){
                 addMessageToChat("user", message);
 
-                const apiUrl = "http://nallen.pythonanywhere.com/chatHistory";
+                const apiUrl = "https://nallen.pythonanywhere.com/chatHistory";
                 const payload = { 
                     message: message, 
                     sessionId: sessionId // Send undefined if no session exists yet
@@ -178,7 +178,7 @@
                 clearChatMessages();
                 addMessageToChat("user", message);
                 
-                const apiUrl = "http://nallen.pythonanywhere.com/chat";
+                const apiUrl = "https://nallen.pythonanywhere.com/chat";
                 const payload = { 
                     message: message
                 };
@@ -200,7 +200,7 @@
                 clearChatMessages();
                 addMessageToChat("user", message);
                 
-                const apiUrl = "http://nallen.pythonanywhere.com/moderation";
+                const apiUrl = "https://nallen.pythonanywhere.com/moderation";
                 const payload = { 
                     message: message
                 };
