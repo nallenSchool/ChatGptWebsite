@@ -53,7 +53,7 @@
             display: inline-block;
         }
         
-        #chatInput {
+        #chatInput, #customMessage {
             width: 1000px; /* Adjust width as needed */
             height: 100px; /* Adjust height to make it taller */
             padding: 10px;
@@ -74,16 +74,15 @@
             font-size: 12px;
             color: black;
         }
-        .settings-buttons {
+        .btnContainer {
             display: flex;
             justify-content: center;
-            gap: 10px; /* Space between buttons */
-            margin-top: 20px;
+            align-items: center;
         }
-        .settings-buttons button.selected {
-            background-color: #007bff; /* Example: blue background for selected button */
-            color: white;
+        #customMessage, #maxNumMessages, #clearChat, #sendChat {
+            margin: 10px 5px; /* Adjusts spacing between textarea and dropdown */
         }
+
     </style>
 </head>
 <body>
@@ -91,23 +90,38 @@
 
     <!-- Chatbot Section -->
     <div id="chatContainer"></div>
+
     <div class="input-container">
         <textarea id="chatInput" placeholder="Type your message..."></textarea>
         <div id="tokenCounter">0 / 1000</div>
     </div>
-    <button id="sendChat">Send</button>
-    <div class="settings-buttons">
-        <button class="selected" id="SingleMessage">Single Message</button>
-        <button id="MessageHistory">Message History</button>
-        <button id="ModerationTest">Moderation</button>
+
+    <div class="btnContainer">
+        <button id="sendChat">Send</button>
+        <button id="clearChat">Clear Chat</button>
+        <label for="maxNumMessages">Max Messages:</label>
+            <select id="maxNumMessages" title="Num Messages">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+            </select>
     </div>
+
+    <label for="customMessage">Custom Message:</label>
+    <textarea id="customMessage" placeholder="Type your Custom System Message..."></textarea>
     <script>
         let isRequestInProgress = false;
         let requestCount = 0;
         const maxRequestsPerMinute = 15; // Adjust as necessary
         let requestTimer = null;
         const maxTokens = 200; // Maximum allowed tokens
-        let currentSetting = "SingleMessage";
         let baseApiUrl = "nallen.pythonanywhere.com"
 
         document.getElementById("chatInput").addEventListener("keydown", function(event) {
@@ -118,22 +132,21 @@
             // If Shift+Enter is pressed, allow the default action (new line)
         });
         document.getElementById("sendChat").addEventListener("click", sendMessage);
+        document.getElementById("clearChat").addEventListener("click", clearChatMessages);
         document.getElementById("chatInput").addEventListener("input", updateTokenCount);
         document.getElementById("chatInput").addEventListener("paste", handlePaste);
-
-        document.getElementById("SingleMessage").addEventListener("click", handleSettingClick);
-        document.getElementById("MessageHistory").addEventListener("click", handleSettingClick);
-        document.getElementById("ModerationTest").addEventListener("click", handleSettingClick);
 
         const inputField = document.getElementById("chatInput");
         const tokenCounter = document.getElementById("tokenCounter");
         tokenCounter.textContent = `0 / ${maxTokens}`;
+        let curNumMessages = 0
 
         function sendMessage() {
             if (isRequestInProgress || requestCount >= maxRequestsPerMinute) {
                 console.log("Please wait before sending another message.");
                 return; // Exit the function if a request is in progress or rate limit exceeded
             }
+            let maxNumMessages = parseInt(document.getElementById("maxNumMessages").value)
 
             const chatInput = document.getElementById("chatInput");
             const chatContainer = document.getElementById("chatContainer");
@@ -141,86 +154,57 @@
 
             const message = chatInput.value.trim();
             if (message === "") return; // Don't send empty messages
-
+            
+            if(curNumMessages >= maxNumMessages){
+                alert("You have reached the max number of messages you can send.\n Reset the window to continue.")
+                return;
+            } 
             isRequestInProgress = true; // Set the flag to true to block further messages
             requestCount++; // Increment the request count
-
             
-            if(currentSetting === "MessageHistory"){
-                addMessageToChat("user", message);
+            addMessageToChat("user", message);
 
-                const apiUrl = "https://nallen.pythonanywhere.com/chatHistory";
-                const payload = { 
-                    message: message, 
-                    sessionId: sessionId // Send undefined if no session exists yet
+            const apiUrl = "https://nallen.pythonanywhere.com/chatHistory";
+            let customMessage = document.getElementById('customMessage').value;
+            let payload = {}
+            if(customMessage === "" || curNumMessages > 0){
+                payload = { 
+                    message: message,
+                    systemMessage: "", 
+                    sessionId: sessionId
                 };
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Assuming data contains { message: "response message", sessionId: "new or existing session ID" }
-                    if (!sessionId) {
-                        // Save the new session ID for future messages
-                        sessionStorage.setItem("chatSessionId", data.sessionId);
-                    }
-                    // Display bot's response
-                    addMessageToChat("bot", data.response);
-                    isRequestInProgress = false;
-                })
-                .catch(error => console.error("Error:", error));
-            } else if(currentSetting === "SingleMessage"){
-                clearChatMessages();
-                addMessageToChat("user", message);
-                
-                const apiUrl = "https://nallen.pythonanywhere.com/chat";
-                const payload = { 
-                    message: message
+            }else{
+                payload = { 
+                    message: message,
+                    systemMessage: customMessage, 
+                    sessionId: sessionId
                 };
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    addMessageToChat("bot", data.response);
-                    isRequestInProgress = false;
-                })
-                .catch(error => console.error("Error:", error));
-            } else if(currentSetting === "ModerationTest"){
-                clearChatMessages();
-                addMessageToChat("user", message);
-                
-                const apiUrl = "https://nallen.pythonanywhere.com/moderation";
-                const payload = { 
-                    message: message
-                };
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    addMessageToChat("bot", data.response);
-                    isRequestInProgress = false;
-                })
-                .catch(error => console.error("Error:", error));
             }
+        
+
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Assuming data contains { message: "response message", sessionId: "new or existing session ID" }
+                if (!sessionId) {
+                    // Save the new session ID for future messages
+                    sessionStorage.setItem("chatSessionId", data.sessionId);
+                }
+                // Display bot's response
+                addMessageToChat("bot", data.response);
+                isRequestInProgress = false;
+            })
+            .catch(error => console.error("Error:", error));
+            
             chatInput.value = ""; // Clear input field after sending
             updateTokenCount(); // Reset token counter
+            curNumMessages++;
 
             if (!requestTimer) {
                 requestTimer = setTimeout(() => {
@@ -292,25 +276,7 @@
         function clearChatMessages() {
             const chatContainer = document.getElementById("chatContainer");
             chatContainer.innerHTML = ''; // Clear the chat container
-        }
-
-        function handleSettingClick(event) {
-            // Remove 'selected' class from all buttons
-            document.querySelectorAll(".settings-buttons button").forEach(button => {
-                button.classList.remove("selected");
-            });
-            
-            // Add 'selected' class to the clicked button
-            event.target.classList.add("selected");
-        
-            // Update the global variable with the id of the clicked button
-            currentSetting = event.target.id;
-            console.log("Selected setting:", currentSetting);
-            if(currentSetting === "MessageHistory"){
-                sessionStorage.setItem("chatSessionId", null);
-            }
-            isRequestInProgress = false;
-            clearChatMessages()
+            curNumMessages = 0;
         }
     </script>
 </body>
