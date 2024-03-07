@@ -166,21 +166,11 @@
 
             const apiUrl = "https://nallen.pythonanywhere.com/chatHistory";
             let customMessage = document.getElementById('customMessage').value;
-            let payload = {}
-            if(customMessage === "" || curNumMessages > 0){
-                payload = { 
-                    message: message,
-                    systemMessage: "", 
-                    sessionId: sessionId
-                };
-            }else{
-                payload = { 
-                    message: message,
-                    systemMessage: customMessage, 
-                    sessionId: sessionId
-                };
-            }
-        
+            const payload = { 
+                message: message,
+                systemMessage: customMessage, 
+                sessionId: parseInt(sessionId)
+            };    
 
             fetch(apiUrl, {
                 method: 'POST',
@@ -192,10 +182,8 @@
             .then(response => response.json())
             .then(data => {
                 // Assuming data contains { message: "response message", sessionId: "new or existing session ID" }
-                if (!sessionId) {
-                    // Save the new session ID for future messages
-                    sessionStorage.setItem("chatSessionId", data.sessionId);
-                }
+                // Save the new session ID for future messages
+                sessionStorage.setItem("chatSessionId", parseInt(data.sessionId));
                 // Display bot's response
                 addMessageToChat("bot", data.response);
                 isRequestInProgress = false;
@@ -277,6 +265,7 @@
             const chatContainer = document.getElementById("chatContainer");
             chatContainer.innerHTML = ''; // Clear the chat container
             curNumMessages = 0;
+            sessionStorage.setItem("chatSessionId", -1);
         }
     </script>
 </body>
