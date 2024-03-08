@@ -13,8 +13,9 @@
             font-family: Arial, sans-serif;
         }
         #chatContainer {
-            width: 60%;
+            width: 700px;
             height: 600px;
+            max-height: 600px;
             border: 1px solid #ccc;
             margin-bottom: 10px;
             overflow-y: auto;
@@ -27,7 +28,7 @@
             word-wrap: break-word;
             max-width: 100%;
             border-radius: 8px; /* Maintain the border radius */
-            overflow: hidden; /* Keeps the content within the border radius */
+            flex-shrink: 0;
             padding: 8px 12px; /* Adjust the vertical and horizontal padding as needed */
         }
         .message pre {
@@ -48,13 +49,13 @@
             align-self: flex-start;
             background-color: #e0e0e0;
         }
-        .input-container {
+        .input-container, .customMessage-container {
             position: relative;
-            display: inline-block;
+            display: block;
         }
         
-        #chatInput, #customMessage {
-            width: 1000px; /* Adjust width as needed */
+        #chatInput, #customMessage, #defaultContext {
+            width: 700px; /* Adjust width as needed */
             height: 100px; /* Adjust height to make it taller */
             padding: 10px;
             font-size: 16px;
@@ -65,7 +66,7 @@
             overflow-y: auto; /* Allows scrolling within the textarea */
         }
         
-        #tokenCounter {
+        #inputTokenCounter, #customTokenCounter {
             position: absolute;
             right: 10px; /* Adjust as needed */
             bottom: 10px; /* Adjust as needed */
@@ -79,8 +80,28 @@
             justify-content: center;
             align-items: center;
         }
-        #customMessage, #maxNumMessages, #clearChat, #sendChat {
+         #clearChat, #sendChat {
             margin: 10px 5px; /* Adjusts spacing between textarea and dropdown */
+        }
+        .main-container{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .right-container, .left-container{
+            margin: 10px 50px; /* Adjusts spacing between textarea and dropdown */
+        }
+        #settingsLabel, #chatWindowLabel{
+            display: block;
+            margin: 10px 5px;
+            font-size: larger;
+        }
+        #customMessage, #maxNumMessages, #defaultContext, #defaultContextLabel{
+            display: block;
+            margin: 10px 5px;
+        }
+        #settingsLabel, #chatWindowLabel{
+            text-align: center;
         }
 
     </style>
@@ -89,40 +110,60 @@
     <!-- Existing HTML elements for API selection and input -->
 
     <!-- Chatbot Section -->
-    <div id="chatContainer"></div>
-
-    <div class="input-container">
-        <textarea id="chatInput" placeholder="Type your message..."></textarea>
-        <div id="tokenCounter">0 / 1000</div>
+    <div class="main-container">
+        <div class="left-container">
+            <label id="chatWindowLabel">Chat Window</label>
+            <div id="chatContainer"></div>
+    
+            <div class="input-container">
+                <textarea id="chatInput" placeholder="Type your message..."></textarea>
+                <div id="inputTokenCounter">0 / 1000</div>
+            </div>
+            <div class="btnContainer">
+                <button id="clearChat">Start Over</button>
+                <button id="sendChat">Send</button>
+            </div>
+        </div>
+        <div class="right-container">
+            <label id="settingsLabel">Settings</label>
+            <label for="defaultContext">Default District Context:</label>
+            <textarea id="defaultContext" placeholder=""></textarea>
+            <label for="useDefaultContext">Use Default Context:</label>
+            <input type="checkbox" id="useDefaultContext" checked>
+            <label id="defaultContextLabel">Custom Chat Context:</label>
+            <div class="customMessage-container">
+                <textarea id="customMessage" placeholder="Type your Custom Chat Context..."></textarea>
+                <div id="customTokenCounter">0 / 1000</div>
+            </div>
+            
+            <label for="maxNumMessages">Max Responses:</label>
+                    <select id="maxNumMessages" title="Num Messages">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5" selected="selected">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                    </select>
+        </div>
     </div>
-
-    <div class="btnContainer">
-        <button id="sendChat">Send</button>
-        <button id="clearChat">Clear Chat</button>
-        <label for="maxNumMessages">Max Messages:</label>
-            <select id="maxNumMessages" title="Num Messages">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-                <option value="9">9</option>
-                <option value="10">10</option>
-            </select>
-    </div>
-
-    <label for="customMessage">Custom Message:</label>
-    <textarea id="customMessage" placeholder="Type your Custom System Message..."></textarea>
+    
+    
     <script>
         let isRequestInProgress = false;
         let requestCount = 0;
         const maxRequestsPerMinute = 15; // Adjust as necessary
         let requestTimer = null;
-        const maxTokens = 200; // Maximum allowed tokens
+        const maxInputTokens = 200; // Maximum allowed tokens
+        const maxCustomTokens = 500;
         let baseApiUrl = "nallen.pythonanywhere.com"
+        
+        
+        getDefaultContext();
 
         document.getElementById("chatInput").addEventListener("keydown", function(event) {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -133,12 +174,17 @@
         });
         document.getElementById("sendChat").addEventListener("click", sendMessage);
         document.getElementById("clearChat").addEventListener("click", clearChatMessages);
-        document.getElementById("chatInput").addEventListener("input", updateTokenCount);
+        document.getElementById("chatInput").addEventListener("input", updateInputTokenCount);
         document.getElementById("chatInput").addEventListener("paste", handlePaste);
 
+        document.getElementById("customMessage").addEventListener("input", updateCustomMessageTokenCount)
+
         const inputField = document.getElementById("chatInput");
-        const tokenCounter = document.getElementById("tokenCounter");
-        tokenCounter.textContent = `0 / ${maxTokens}`;
+        const customMessageField = document.getElementById("customMessage");
+        const inputTokenCounter = document.getElementById("inputTokenCounter");
+        const customTokenCounter = document.getElementById("customTokenCounter");
+        inputTokenCounter.textContent = `0 / ${maxInputTokens}`;
+        customTokenCounter.textContent = `0 / ${maxCustomTokens}`;
         let curNumMessages = 0
 
         function sendMessage() {
@@ -150,6 +196,8 @@
 
             const chatInput = document.getElementById("chatInput");
             const chatContainer = document.getElementById("chatContainer");
+            const useDefaultContext = document.getElementById("useDefaultContext").value;
+            const defaultContext = document.getElementById("defaultContext").value;
             let sessionId = sessionStorage.getItem("chatSessionId"); // Retrieve existing session ID
 
             const message = chatInput.value.trim();
@@ -165,10 +213,19 @@
             addMessageToChat("user", message);
 
             const apiUrl = "https://nallen.pythonanywhere.com/chatHistory";
+            let outputMessage = ""
             let customMessage = document.getElementById('customMessage').value;
+            if(useDefaultContext){
+                outputMessage += "Here is your default rules:\n";
+                outputMessage += defaultContext + "\n";
+                outputMessage += "Now here is the teachers set of rules:\n";
+                outputMessage += customMessage;
+            }else{
+                outputMessage = customMessage;
+            }
             const payload = { 
                 message: message,
-                systemMessage: customMessage, 
+                systemMessage: outputMessage, 
                 sessionId: parseInt(sessionId)
             };    
 
@@ -191,7 +248,7 @@
             .catch(error => console.error("Error:", error));
             
             chatInput.value = ""; // Clear input field after sending
-            updateTokenCount(); // Reset token counter
+            updateInputTokenCount(); // Reset token counter
             curNumMessages++;
 
             if (!requestTimer) {
@@ -200,6 +257,17 @@
                     requestTimer = null;
                 }, 60000); // 60 seconds
             }
+        }
+
+        function getDefaultContext(){
+            const apiUrl = "https://nallen.pythonanywhere.com/system";
+            let defaultContext = "";
+            fetch(apiUrl)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("defaultContext").value = data.response;
+            })
+            .catch(error => console.error("Error:", error));
         }
 
         function addMessageToChat(sender, message) {
@@ -219,25 +287,43 @@
         
             chatContainer.prepend(messageDiv); // Adds the new message at the top
         }
-
-        function updateTokenCount(event) {
+        function updateCustomMessageTokenCount(event){
             // Calculate the token count based on current input
-            const tokens = inputField.value.trim().split(/\s+|(?=[,.!?;:])|(?<=[,.!?;:])/).filter(Boolean);
+            const tokens = customMessageField.value.trim().split(/\s+|(?=[,.!?;:])|(?<=[,.!?;:])/).filter(Boolean);
             const roughTokenCount = tokens.length;
 
-            if (roughTokenCount > maxTokens) {
+            if (roughTokenCount > maxCustomTokens) {
                 // If the input exceeds the token limit, prevent the additional input
                 // Allow user to delete or backspace
                 if (event.inputType !== "deleteContentBackward" && event.inputType !== "deleteContentForward") {
                     event.target.value = event.target.value.slice(0, -1); // Remove the last character
                 }
-                tokenCounter.textContent = `${maxTokens} / ${maxTokens}`;
+                customTokenCounter.textContent = `${maxCustomTokens} / ${maxCustomTokens}`;
             } else {
-                tokenCounter.textContent = `${roughTokenCount} / ${maxTokens}`;
+                customTokenCounter.textContent = `${roughTokenCount} / ${maxCustomTokens}`;
             }
 
             // Update styling based on token count
-            tokenCounter.style.color = roughTokenCount >= maxTokens ? 'red' : 'black';
+            customTokenCounter.style.color = roughTokenCount >= maxCustomTokens ? 'red' : 'black';
+        }
+        function updateInputTokenCount(event) {
+            // Calculate the token count based on current input
+            const tokens = inputField.value.trim().split(/\s+|(?=[,.!?;:])|(?<=[,.!?;:])/).filter(Boolean);
+            const roughTokenCount = tokens.length;
+
+            if (roughTokenCount > maxInputTokens) {
+                // If the input exceeds the token limit, prevent the additional input
+                // Allow user to delete or backspace
+                if (event.inputType !== "deleteContentBackward" && event.inputType !== "deleteContentForward") {
+                    event.target.value = event.target.value.slice(0, -1); // Remove the last character
+                }
+                inputTokenCounter.textContent = `${maxInputTokens} / ${maxInputTokens}`;
+            } else {
+                inputTokenCounter.textContent = `${roughTokenCount} / ${maxInputTokens}`;
+            }
+
+            // Update styling based on token count
+            inputTokenCounter.style.color = roughTokenCount >= maxInputTokens ? 'red' : 'black';
         }
 
         function handlePaste(event) {
