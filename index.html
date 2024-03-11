@@ -13,9 +13,9 @@
             font-family: Arial, sans-serif;
         }
         #chatContainer {
-            width: 700px;
-            height: 600px;
-            max-height: 600px;
+            width: 30vw;
+            max-height: 50vh;
+            height: 50vh;
             border: 1px solid #ccc;
             margin-bottom: 10px;
             overflow-y: auto;
@@ -55,10 +55,10 @@
         }
         
         #chatInput, #customMessage, #defaultContext {
-            width: 700px; /* Adjust width as needed */
-            height: 100px; /* Adjust height to make it taller */
+            width: 30vw;
+            height: 15vh;
             padding: 10px;
-            font-size: 16px;
+            font-size: 1rem;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box; /* Ensures padding does not affect the overall dimensions */
@@ -89,7 +89,7 @@
             align-items: center;
         }
         .right-container, .left-container{
-            margin: 10px 50px; /* Adjusts spacing between textarea and dropdown */
+            margin: 10px 100px; /* Adjusts spacing between textarea and dropdown */
         }
         #settingsLabel, #chatWindowLabel{
             display: block;
@@ -102,6 +102,20 @@
         }
         #settingsLabel, #chatWindowLabel{
             text-align: center;
+        }
+
+        @media (max-width: 600px){
+            #chatContainer, #chatInput, #customMessage, #defaultContext {
+                width: 95%; /* Increase width to use more of the screen */
+                height: auto; /* Make height auto to accommodate content */
+            }
+            .btnContainer button {
+                padding: 10px 20px; /* Increase button padding for easier tapping */
+                font-size: 1rem; /* Increase font size for readability */
+            }
+            body {
+                font-size: 0.9rem; /* Adjust base font size for smaller screens */
+            }
         }
 
     </style>
